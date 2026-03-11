@@ -16,6 +16,7 @@ import { StateSyncAdapter } from './state-sync.js';
 class MockDynamoClient {
   writtenItems: StateItem[] = [];
   queriedItems: StateItem[] = [];
+  deliveredMessages: Array<{ runId: string; sk: string }> = [];
 
   async batchWriteItems(items: StateItem[]): Promise<void> {
     this.writtenItems.push(...items);
@@ -25,9 +26,19 @@ class MockDynamoClient {
     return this.queriedItems;
   }
 
+  async markInboundMessageDelivered(runId: string, sk: string): Promise<void> {
+    this.deliveredMessages.push({ runId, sk });
+    // Mark the item as delivered in our mock store
+    const item = this.queriedItems.find(i => i.SK === sk);
+    if (item) {
+      item.data.status = 'delivered';
+    }
+  }
+
   reset(): void {
     this.writtenItems = [];
     this.queriedItems = [];
+    this.deliveredMessages = [];
   }
 }
 
@@ -341,6 +352,191 @@ describe('StateSyncAdapter', () => {
       adapter.stop();
 
       vi.useRealTimers();
+    });
+  });
+
+  describe('pollInboundMessages', () => {
+    it('should write inbound messages from DynamoDB to SQLite', async () => {
+      mockDynamo.queriedItems = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000000',
+          type: 'inbound_msg',
+          data: {
+            messageId: 'msg-001',
+            fromSession: 'web-user',
+            toSession: 'manager',
+            subject: 'Answer to escalation',
+            body: 'Please proceed with option A',
+          },
+          updatedAt: '2026-03-11T00:00:00.000Z',
+          ttl: 9999999999,
+        },
+      ];
+
+      await adapter.pollInboundMessages(db);
+
+      // Verify message was inserted into SQLite
+      const result = db.exec("SELECT * FROM messages WHERE id = 'msg-001'");
+      expect(result).toHaveLength(1);
+      const row = result[0];
+      const cols = row.columns;
+      const vals = row.values[0];
+      const msg = Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
+
+      expect(msg.from_session).toBe('web-user');
+      expect(msg.to_session).toBe('manager');
+      expect(msg.subject).toBe('Answer to escalation');
+      expect(msg.body).toBe('Please proceed with option A');
+      expect(msg.status).toBe('pending');
+
+      // Verify message was marked as delivered in DynamoDB
+      expect(mockDynamo.deliveredMessages).toHaveLength(1);
+      expect(mockDynamo.deliveredMessages[0].sk).toBe('INBOUND_MSG#1710000000000');
+    });
+
+    it('should skip already-delivered messages', async () => {
+      mockDynamo.queriedItems = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000000',
+          type: 'inbound_msg',
+          data: {
+            messageId: 'msg-already-delivered',
+            fromSession: 'web-user',
+            toSession: 'manager',
+            body: 'Old message',
+            status: 'delivered',
+          },
+          updatedAt: '2026-03-11T00:00:00.000Z',
+          ttl: 9999999999,
+        },
+      ];
+
+      await adapter.pollInboundMessages(db);
+
+      // Should not insert anything
+      const result = db.exec("SELECT * FROM messages WHERE id = 'msg-already-delivered'");
+      expect(result).toHaveLength(0);
+
+      // Should not call markInboundMessageDelivered
+      expect(mockDynamo.deliveredMessages).toHaveLength(0);
+    });
+
+    it('should handle multiple inbound messages', async () => {
+      mockDynamo.queriedItems = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000001',
+          type: 'inbound_msg',
+          data: {
+            messageId: 'msg-a',
+            fromSession: 'user-1',
+            toSession: 'agent-senior-1',
+            body: 'First message',
+          },
+          updatedAt: '2026-03-11T00:00:01.000Z',
+          ttl: 9999999999,
+        },
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000002',
+          type: 'inbound_msg',
+          data: {
+            messageId: 'msg-b',
+            fromSession: 'user-1',
+            toSession: 'agent-senior-2',
+            body: 'Second message',
+          },
+          updatedAt: '2026-03-11T00:00:02.000Z',
+          ttl: 9999999999,
+        },
+      ];
+
+      await adapter.pollInboundMessages(db);
+
+      // Both messages should be in SQLite
+      const result = db.exec('SELECT * FROM messages ORDER BY id');
+      expect(result).toHaveLength(1);
+      expect(result[0].values).toHaveLength(2);
+
+      // Both should be marked delivered
+      expect(mockDynamo.deliveredMessages).toHaveLength(2);
+    });
+
+    it('should use default values for missing fields', async () => {
+      mockDynamo.queriedItems = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000003',
+          type: 'inbound_msg',
+          data: {
+            body: 'Message with minimal fields',
+          },
+          updatedAt: '2026-03-11T00:00:00.000Z',
+          ttl: 9999999999,
+        },
+      ];
+
+      await adapter.pollInboundMessages(db);
+
+      const result = db.exec('SELECT * FROM messages');
+      expect(result).toHaveLength(1);
+      const cols = result[0].columns;
+      const vals = result[0].values[0];
+      const msg = Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
+
+      expect(msg.from_session).toBe('web-ui');
+      expect(msg.to_session).toBe('manager');
+      expect(msg.body).toBe('Message with minimal fields');
+      expect(msg.id).toBeTruthy(); // auto-generated UUID
+    });
+
+    it('should not duplicate messages on re-poll (INSERT OR IGNORE)', async () => {
+      const items = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#1710000000004',
+          type: 'inbound_msg',
+          data: {
+            messageId: 'msg-dup',
+            fromSession: 'web-user',
+            toSession: 'manager',
+            body: 'Duplicate test',
+          },
+          updatedAt: '2026-03-11T00:00:00.000Z',
+          ttl: 9999999999,
+        },
+      ];
+
+      mockDynamo.queriedItems = items;
+      await adapter.pollInboundMessages(db);
+
+      // Reset delivered tracking but keep the same items as "not delivered" for this test
+      mockDynamo.deliveredMessages = [];
+      mockDynamo.queriedItems = [
+        {
+          ...items[0],
+          data: { ...items[0].data }, // fresh copy without delivered status
+        },
+      ];
+
+      await adapter.pollInboundMessages(db);
+
+      // Should still only have one message in SQLite
+      const result = db.exec("SELECT * FROM messages WHERE id = 'msg-dup'");
+      expect(result).toHaveLength(1);
+      expect(result[0].values).toHaveLength(1);
+    });
+
+    it('should do nothing when no inbound messages exist', async () => {
+      mockDynamo.queriedItems = [];
+
+      await adapter.pollInboundMessages(db);
+
+      const result = db.exec('SELECT * FROM messages');
+      expect(result).toHaveLength(0);
+      expect(mockDynamo.deliveredMessages).toHaveLength(0);
     });
   });
 });
