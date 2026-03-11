@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 import { VpcStack } from '../lib/vpc-stack';
 
 describe('VpcStack', () => {

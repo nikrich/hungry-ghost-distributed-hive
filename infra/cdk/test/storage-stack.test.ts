@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 import { StorageStack } from '../lib/storage-stack';
 import { VpcStack } from '../lib/vpc-stack';
 
@@ -94,9 +94,7 @@ describe('StorageStack', () => {
 
     it('configures lifecycle policy for IA transition after 7 days', () => {
       template.hasResourceProperties('AWS::EFS::FileSystem', {
-        LifecyclePolicies: [
-          { TransitionToIA: 'AFTER_7_DAYS' },
-        ],
+        LifecyclePolicies: [{ TransitionToIA: 'AFTER_7_DAYS' }],
       });
     });
 

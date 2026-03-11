@@ -41,13 +41,13 @@ export class VpcStack extends cdk.Stack {
     this.fargateSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
-      'Allow HTTPS outbound',
+      'Allow HTTPS outbound'
     );
 
     this.fargateSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(22),
-      'Allow git SSH outbound',
+      'Allow git SSH outbound'
     );
 
     // sg-efs: Inbound 2049 (NFS) from sg-fargate
@@ -61,7 +61,7 @@ export class VpcStack extends cdk.Stack {
     this.efsSecurityGroup.addIngressRule(
       this.fargateSecurityGroup,
       ec2.Port.tcp(2049),
-      'Allow NFS from Fargate tasks',
+      'Allow NFS from Fargate tasks'
     );
 
     // sg-lambda: Outbound 443 (DynamoDB, API Gateway)
@@ -75,7 +75,7 @@ export class VpcStack extends cdk.Stack {
     this.lambdaSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
-      'Allow HTTPS outbound for DynamoDB and API Gateway',
+      'Allow HTTPS outbound for DynamoDB and API Gateway'
     );
 
     // Outputs

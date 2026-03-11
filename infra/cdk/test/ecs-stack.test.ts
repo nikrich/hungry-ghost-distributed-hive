@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { EcsStack, SIZING_TIERS } from '../lib/ecs-stack';
 import { StorageStack } from '../lib/storage-stack';
@@ -177,10 +177,7 @@ describe('EcsStack', () => {
         PolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: Match.arrayWith([
-                'dynamodb:BatchGetItem',
-                'dynamodb:PutItem',
-              ]),
+              Action: Match.arrayWith(['dynamodb:BatchGetItem', 'dynamodb:PutItem']),
             }),
           ]),
         }),
@@ -242,8 +239,20 @@ describe('Sizing Tiers', () => {
   });
 
   it('exports correct SIZING_TIERS constants', () => {
-    expect(SIZING_TIERS.small).toEqual({ cpu: 2048, memoryLimitMiB: 8192, ephemeralStorageGiB: 50 });
-    expect(SIZING_TIERS.medium).toEqual({ cpu: 4096, memoryLimitMiB: 16384, ephemeralStorageGiB: 100 });
-    expect(SIZING_TIERS.large).toEqual({ cpu: 8192, memoryLimitMiB: 32768, ephemeralStorageGiB: 200 });
+    expect(SIZING_TIERS.small).toEqual({
+      cpu: 2048,
+      memoryLimitMiB: 8192,
+      ephemeralStorageGiB: 50,
+    });
+    expect(SIZING_TIERS.medium).toEqual({
+      cpu: 4096,
+      memoryLimitMiB: 16384,
+      ephemeralStorageGiB: 100,
+    });
+    expect(SIZING_TIERS.large).toEqual({
+      cpu: 8192,
+      memoryLimitMiB: 32768,
+      ephemeralStorageGiB: 200,
+    });
   });
 });

@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as efs from 'aws-cdk-lib/aws-efs';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -68,9 +68,7 @@ export class EcsStack extends cdk.Stack {
       roleName: 'hive-execution-role',
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonECSTaskExecutionRolePolicy',
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
       ],
     });
 
@@ -94,22 +92,22 @@ export class EcsStack extends cdk.Stack {
               resource: 'event-bus',
               resourceName: props.eventBusName,
             },
-            this,
+            this
           ),
         ],
-      }),
+      })
     );
 
     // Secrets references
     const anthropicKeySecret = secretsmanager.Secret.fromSecretNameV2(
       this,
       'AnthropicKey',
-      'hive/anthropic-api-key',
+      'hive/anthropic-api-key'
     );
     const githubTokenSecret = secretsmanager.Secret.fromSecretNameV2(
       this,
       'GithubToken',
-      'hive/github-token',
+      'hive/github-token'
     );
 
     // Grant secrets read to execution role
@@ -140,7 +138,11 @@ export class EcsStack extends cdk.Stack {
     });
 
     // Grant EFS access to task role
-    props.fileSystem.grant(taskRole, 'elasticfilesystem:ClientMount', 'elasticfilesystem:ClientWrite');
+    props.fileSystem.grant(
+      taskRole,
+      'elasticfilesystem:ClientMount',
+      'elasticfilesystem:ClientWrite'
+    );
 
     // Log group
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
