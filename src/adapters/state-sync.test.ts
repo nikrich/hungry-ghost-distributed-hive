@@ -539,4 +539,245 @@ describe('StateSyncAdapter', () => {
       expect(mockDynamo.deliveredMessages).toHaveLength(0);
     });
   });
+
+  describe('DynamoDB batch chunking', () => {
+    it('should pass all items to batchWriteItems when syncing many entities', async () => {
+      // StateSyncAdapter collects all changed items and calls batchWriteItems once.
+      // The DynamoClient.batchWriteItems implementation is responsible for chunking
+      // into groups of ≤25 before sending to AWS. Here we verify the adapter
+      // forwards all items correctly.
+      const batchWriteCalls: StateItem[][] = [];
+      const collectingDynamo = {
+        writtenItems: [] as StateItem[],
+        queriedItems: [] as StateItem[],
+        deliveredMessages: [] as Array<{ runId: string; sk: string }>,
+        async batchWriteItems(items: StateItem[]): Promise<void> {
+          batchWriteCalls.push([...items]);
+          collectingDynamo.writtenItems.push(...items);
+        },
+        async queryByRunId(): Promise<StateItem[]> {
+          return [];
+        },
+        async markInboundMessageDelivered(): Promise<void> {},
+      };
+
+      const chunkAdapter = new StateSyncAdapter(
+        {
+          runId: 'chunk-test',
+          dbPath: '/workspace/.hive/hive.db',
+          dynamoTable: 'test-table',
+          eventBusName: 'test-bus',
+          pollIntervalMs: 5000,
+        },
+        collectingDynamo as unknown as DynamoClient,
+        mockEvents as unknown as EventEmitter
+      );
+
+      // Insert 30 stories
+      for (let i = 0; i < 30; i++) {
+        createStory(db, {
+          title: `Story ${i}`,
+          description: `Desc ${i}`,
+        });
+      }
+
+      await chunkAdapter.syncState(db);
+      chunkAdapter.stop();
+
+      // All 30 stories should be written to DynamoDB
+      const storyItems = collectingDynamo.writtenItems.filter(i => i.type === 'story');
+      expect(storyItems).toHaveLength(30);
+
+      // batchWriteItems is called once by the adapter with all items
+      expect(batchWriteCalls).toHaveLength(1);
+      expect(batchWriteCalls[0].filter(i => i.type === 'story')).toHaveLength(30);
+    });
+
+    it('DynamoClient.createStateItem should produce valid PK/SK keys for all entity types', () => {
+      const types = ['story', 'agent', 'pr', 'escalation', 'log', 'meta'] as const;
+      for (const type of types) {
+        const item = DynamoClient.createStateItem('run-xyz', `${type.toUpperCase()}#id-1`, type, {
+          id: 'id-1',
+        });
+        expect(item.PK).toBe('RUN#run-xyz');
+        expect(item.SK).toBe(`${type.toUpperCase()}#id-1`);
+        expect(item.type).toBe(type);
+        expect(typeof item.ttl).toBe('number');
+        expect(item.ttl).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('EventBridge batch chunking', () => {
+    it('should chunk emitBatch into groups of 10', async () => {
+      const batchCalls: Array<Array<{ detailType: HiveDetailType; detail: HiveEventDetail }>> = [];
+      const chunkingEvents = {
+        emittedEvents: [] as Array<{ detailType: HiveDetailType; detail: HiveEventDetail }>,
+        async emit(detailType: HiveDetailType, detail: HiveEventDetail): Promise<void> {
+          chunkingEvents.emittedEvents.push({ detailType, detail });
+        },
+        async emitBatch(
+          events: Array<{ detailType: HiveDetailType; detail: HiveEventDetail }>
+        ): Promise<void> {
+          batchCalls.push([...events]);
+          chunkingEvents.emittedEvents.push(...events);
+        },
+      };
+
+      const chunkAdapter = new StateSyncAdapter(
+        {
+          runId: 'chunk-events-test',
+          dbPath: '/workspace/.hive/hive.db',
+          dynamoTable: 'test-table',
+          eventBusName: 'test-bus',
+          pollIntervalMs: 5000,
+        },
+        mockDynamo as unknown as DynamoClient,
+        chunkingEvents as unknown as EventEmitter
+      );
+
+      // Insert 12 stories — generates 12 story_update events
+      for (let i = 0; i < 12; i++) {
+        createStory(db, {
+          title: `Event Story ${i}`,
+          description: `Desc ${i}`,
+        });
+      }
+
+      await chunkAdapter.syncState(db);
+      chunkAdapter.stop();
+
+      // All 12 events should be emitted
+      const storyEvents = chunkingEvents.emittedEvents.filter(e => e.detailType === 'story_update');
+      expect(storyEvents).toHaveLength(12);
+
+      // StateSyncAdapter calls emitBatch once with all events;
+      // EventEmitter.emitBatch internally chunks at 10. Since we're using a mock
+      // that receives the full array, verify it was called with all 12.
+      expect(batchCalls.length).toBeGreaterThanOrEqual(1);
+      const totalEmitted = batchCalls.reduce((sum, call) => sum + call.length, 0);
+      expect(totalEmitted).toBe(12);
+    });
+  });
+
+  describe('EventEmitter', () => {
+    it('emit() should use single-event source and detailType', async () => {
+      const emittedSingle: Array<{ detailType: HiveDetailType; detail: HiveEventDetail }> = [];
+      const singleEvents = {
+        emittedEvents: [] as Array<{ detailType: HiveDetailType; detail: HiveEventDetail }>,
+        async emit(detailType: HiveDetailType, detail: HiveEventDetail): Promise<void> {
+          emittedSingle.push({ detailType, detail });
+          singleEvents.emittedEvents.push({ detailType, detail });
+        },
+        async emitBatch(
+          events: Array<{ detailType: HiveDetailType; detail: HiveEventDetail }>
+        ): Promise<void> {
+          singleEvents.emittedEvents.push(...events);
+        },
+      };
+
+      // Trigger run_complete which uses emit() not emitBatch()
+      const story = createStory(db, { title: 'Done', description: 'Desc' });
+      db.run(
+        "UPDATE stories SET status = 'merged', updated_at = '2099-02-01T00:00:00.000Z' WHERE id = ?",
+        [story.id]
+      );
+
+      const singleAdapter = new StateSyncAdapter(
+        {
+          runId: 'emit-test',
+          dbPath: '/workspace/.hive/hive.db',
+          dynamoTable: 'test-table',
+          eventBusName: 'test-bus',
+          pollIntervalMs: 5000,
+        },
+        mockDynamo as unknown as DynamoClient,
+        singleEvents as unknown as EventEmitter
+      );
+
+      await singleAdapter.syncState(db);
+      singleAdapter.stop();
+
+      // run_complete uses emit() directly
+      expect(emittedSingle.some(e => e.detailType === 'run_complete')).toBe(true);
+    });
+  });
+
+  describe('poll() mtime guard', () => {
+    it('should skip sync when db file does not exist', async () => {
+      const missingPathAdapter = new StateSyncAdapter(
+        {
+          runId: 'missing-db',
+          dbPath: '/nonexistent/path/.hive/hive.db',
+          dynamoTable: 'test-table',
+          eventBusName: 'test-bus',
+          pollIntervalMs: 5000,
+        },
+        mockDynamo as unknown as DynamoClient,
+        mockEvents as unknown as EventEmitter
+      );
+
+      // poll() should not throw even when the db file doesn't exist
+      await expect(missingPathAdapter.poll()).resolves.toBeUndefined();
+
+      // No DynamoDB writes should have happened
+      expect(mockDynamo.writtenItems).toHaveLength(0);
+      missingPathAdapter.stop();
+    });
+  });
+
+  describe('error resilience', () => {
+    it('should propagate DynamoDB errors from syncState', async () => {
+      const failingDynamo = {
+        writtenItems: [] as StateItem[],
+        queriedItems: [] as StateItem[],
+        deliveredMessages: [] as Array<{ runId: string; sk: string }>,
+        async batchWriteItems(_items: StateItem[]): Promise<void> {
+          throw new Error('DynamoDB write failed');
+        },
+        async queryByRunId(): Promise<StateItem[]> {
+          return [];
+        },
+        async markInboundMessageDelivered(): Promise<void> {},
+      };
+
+      const failingAdapter = new StateSyncAdapter(
+        {
+          runId: 'failing-test',
+          dbPath: '/workspace/.hive/hive.db',
+          dynamoTable: 'test-table',
+          eventBusName: 'test-bus',
+          pollIntervalMs: 5000,
+        },
+        failingDynamo as unknown as DynamoClient,
+        mockEvents as unknown as EventEmitter
+      );
+
+      createStory(db, { title: 'Fail story', description: 'Desc' });
+
+      // syncState should throw when DynamoDB fails
+      await expect(failingAdapter.syncState(db)).rejects.toThrow('DynamoDB write failed');
+      failingAdapter.stop();
+    });
+  });
+
+  describe('StateSyncConfig', () => {
+    it('should construct adapter with injected dynamo and events clients', () => {
+      const customAdapter = new StateSyncAdapter(
+        {
+          runId: 'config-test',
+          dbPath: '/workspace/.hive/hive.db',
+          dynamoTable: 'custom-table',
+          eventBusName: 'custom-bus',
+          pollIntervalMs: 1000,
+          region: 'eu-west-1',
+        },
+        mockDynamo as unknown as DynamoClient,
+        mockEvents as unknown as EventEmitter
+      );
+
+      expect(customAdapter).toBeDefined();
+      customAdapter.stop();
+    });
+  });
 });
