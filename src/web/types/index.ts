@@ -29,6 +29,7 @@ export interface Story {
   assignee?: string;
   prNumber?: number;
   prUrl?: string;
+  dependencies?: string[];
 }
 
 export interface Agent {
