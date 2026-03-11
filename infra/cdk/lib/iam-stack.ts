@@ -57,12 +57,7 @@ export class IamStack extends cdk.Stack {
     this.apiRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
-        resources: [
-          cdk.Arn.format(
-            { service: 'sqs', resource: 'distributed-hive-*' },
-            this
-          ),
-        ],
+        resources: [cdk.Arn.format({ service: 'sqs', resource: 'distributed-hive-*' }, this)],
       })
     );
 

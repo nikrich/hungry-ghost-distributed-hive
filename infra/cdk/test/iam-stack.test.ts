@@ -82,11 +82,7 @@ describe('IamStack', () => {
         PolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: Match.arrayWith([
-                'ecs:RunTask',
-                'ecs:StopTask',
-                'ecs:DescribeTasks',
-              ]),
+              Action: Match.arrayWith(['ecs:RunTask', 'ecs:StopTask', 'ecs:DescribeTasks']),
             }),
           ]),
         }),
