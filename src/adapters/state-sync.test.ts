@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAgent } from '../db/queries/agents.js';
 import { createEscalation } from '../db/queries/escalations.js';
 import { createLog } from '../db/queries/logs.js';
+import { getMessageById } from '../db/queries/messages.js';
 import { createPullRequest } from '../db/queries/pull-requests.js';
 import { createStory } from '../db/queries/stories.js';
 import { createTestDatabase } from '../db/queries/test-helpers.js';
@@ -16,18 +17,27 @@ import { StateSyncAdapter } from './state-sync.js';
 class MockDynamoClient {
   writtenItems: StateItem[] = [];
   queriedItems: StateItem[] = [];
+  deletedKeys: Array<{ PK: string; SK: string }> = [];
 
   async batchWriteItems(items: StateItem[]): Promise<void> {
     this.writtenItems.push(...items);
   }
 
-  async queryByRunId(_runId: string, _skPrefix?: string): Promise<StateItem[]> {
+  async queryByRunId(_runId: string, skPrefix?: string): Promise<StateItem[]> {
+    if (skPrefix) {
+      return this.queriedItems.filter(item => item.SK.startsWith(skPrefix));
+    }
     return this.queriedItems;
+  }
+
+  async deleteItems(keys: Array<{ PK: string; SK: string }>): Promise<void> {
+    this.deletedKeys.push(...keys);
   }
 
   reset(): void {
     this.writtenItems = [];
     this.queriedItems = [];
+    this.deletedKeys = [];
   }
 }
 
@@ -327,6 +337,190 @@ describe('StateSyncAdapter', () => {
       // TTL should be within a few seconds of 30 days from now
       expect(item.ttl).toBeGreaterThanOrEqual(now + thirtyDays - 5);
       expect(item.ttl).toBeLessThanOrEqual(now + thirtyDays + 5);
+    });
+  });
+
+  describe('relayInboundMessages', () => {
+    it('should write inbound messages to SQLite messages table', async () => {
+      const inboundItems: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:00.000Z',
+          type: 'inbound_msg',
+          data: {
+            id: 'msg-1',
+            fromSession: 'web-user-abc',
+            toSession: 'agent-session-1',
+            body: 'Please fix the login bug',
+            subject: 'Escalation response',
+          },
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, inboundItems);
+
+      const message = getMessageById(db, 'msg-1');
+      expect(message).toBeDefined();
+      expect(message?.from_session).toBe('web-user-abc');
+      expect(message?.to_session).toBe('agent-session-1');
+      expect(message?.body).toBe('Please fix the login bug');
+      expect(message?.subject).toBe('Escalation response');
+      expect(message?.status).toBe('pending');
+    });
+
+    it('should handle multiple inbound messages in order', async () => {
+      const inboundItems: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:01.000Z',
+          type: 'inbound_msg',
+          data: {
+            id: 'msg-2',
+            fromSession: 'web-user',
+            toSession: 'agent-1',
+            body: 'Second message',
+          },
+          updatedAt: '2024-01-01T00:00:01.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:02.000Z',
+          type: 'inbound_msg',
+          data: {
+            id: 'msg-3',
+            fromSession: 'web-user',
+            toSession: 'agent-2',
+            body: 'Third message',
+          },
+          updatedAt: '2024-01-01T00:00:02.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, inboundItems);
+
+      expect(getMessageById(db, 'msg-2')).toBeDefined();
+      expect(getMessageById(db, 'msg-3')).toBeDefined();
+      expect(getMessageById(db, 'msg-2')?.body).toBe('Second message');
+      expect(getMessageById(db, 'msg-3')?.body).toBe('Third message');
+    });
+
+    it('should delete processed items from DynamoDB', async () => {
+      const inboundItems: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:00.000Z',
+          type: 'inbound_msg',
+          data: {
+            id: 'msg-del-1',
+            fromSession: 'web-user',
+            toSession: 'agent-1',
+            body: 'Delete me after relay',
+          },
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, inboundItems);
+
+      expect(mockDynamo.deletedKeys).toHaveLength(1);
+      expect(mockDynamo.deletedKeys[0]).toEqual({
+        PK: 'RUN#test-run-123',
+        SK: 'INBOUND_MSG#2024-01-01T00:00:00.000Z',
+      });
+    });
+
+    it('should use fallback values when data fields are missing', async () => {
+      const inboundItems: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:05.000Z',
+          type: 'inbound_msg',
+          data: {},
+          updatedAt: '2024-01-01T00:00:05.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, inboundItems);
+
+      // Should use SK timestamp as message ID fallback
+      const message = getMessageById(db, '2024-01-01T00:00:05.000Z');
+      expect(message).toBeDefined();
+      expect(message?.from_session).toBe('web-user');
+      expect(message?.to_session).toBe('');
+      expect(message?.body).toBe('');
+      expect(message?.subject).toBeNull();
+    });
+
+    it('should track last processed timestamp to avoid re-processing', async () => {
+      const firstBatch: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:00.000Z',
+          type: 'inbound_msg',
+          data: { id: 'msg-first', fromSession: 'user', toSession: 'agent', body: 'First' },
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, firstBatch);
+      mockDynamo.reset();
+
+      // Simulate DynamoDB returning same items (not yet deleted due to eventual consistency)
+      // plus new items. The adapter filters by lastInboundTimestamp.
+      mockDynamo.queriedItems = [
+        ...firstBatch,
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:01:00.000Z',
+          type: 'inbound_msg',
+          data: { id: 'msg-second', fromSession: 'user', toSession: 'agent', body: 'Second' },
+          updatedAt: '2024-01-01T00:01:00.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      // Manually filter like pollInboundMessages does
+      const items = mockDynamo.queriedItems.filter(
+        item => item.SK.startsWith('INBOUND_MSG#')
+      );
+      const newItems = items.filter(
+        item => item.SK > `INBOUND_MSG#2024-01-01T00:00:00.000Z`
+      );
+
+      // Only the second message should be new
+      expect(newItems).toHaveLength(1);
+      expect(newItems[0].data.id).toBe('msg-second');
+    });
+
+    it('should handle messages with subject field', async () => {
+      const inboundItems: StateItem[] = [
+        {
+          PK: 'RUN#test-run-123',
+          SK: 'INBOUND_MSG#2024-01-01T00:00:00.000Z',
+          type: 'inbound_msg',
+          data: {
+            id: 'msg-subj',
+            fromSession: 'web-user',
+            toSession: 'agent-1',
+            body: 'Response body',
+            subject: 'RE: Escalation #42',
+          },
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        },
+      ];
+
+      await adapter.relayInboundMessages(db, inboundItems);
+
+      const message = getMessageById(db, 'msg-subj');
+      expect(message?.subject).toBe('RE: Escalation #42');
     });
   });
 

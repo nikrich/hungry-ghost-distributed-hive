@@ -55,3 +55,23 @@ export function getAllPendingMessages(db: Database): MessageRow[] {
   `
   );
 }
+
+export function createMessage(
+  db: Database,
+  params: {
+    id: string;
+    fromSession: string;
+    toSession: string;
+    body: string;
+    subject?: string | null;
+  }
+): MessageRow {
+  const now = new Date().toISOString();
+  run(
+    db,
+    `INSERT INTO messages (id, from_session, to_session, subject, body, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+    [params.id, params.fromSession, params.toSession, params.subject || null, params.body, now]
+  );
+  return queryOne<MessageRow>(db, 'SELECT * FROM messages WHERE id = ?', [params.id])!;
+}

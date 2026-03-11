@@ -3,10 +3,11 @@
 import { statSync } from 'fs';
 import type { Database } from 'sql.js';
 import type { AgentRow, EscalationRow, PullRequestRow, StoryRow } from '../db/client.js';
-import { getReadOnlyDatabase } from '../db/client.js';
+import { getDatabase, getReadOnlyDatabase } from '../db/client.js';
 import { getAllAgents } from '../db/queries/agents.js';
 import { getAllEscalations } from '../db/queries/escalations.js';
 import { getRecentLogs } from '../db/queries/logs.js';
+import { createMessage } from '../db/queries/messages.js';
 import { getAllPullRequests } from '../db/queries/pull-requests.js';
 import { getAllStories } from '../db/queries/stories.js';
 import { DynamoClient, type StateItem } from './dynamo-client.js';
@@ -36,6 +37,7 @@ export class StateSyncAdapter {
   private events: EventEmitter;
   private lastSnapshot: StateSnapshot;
   private lastMtime: number = 0;
+  private lastInboundTimestamp: string = '';
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -96,6 +98,9 @@ export class StateSyncAdapter {
       // DB file doesn't exist yet, skip this poll
       return;
     }
+
+    // Poll inbound messages from DynamoDB regardless of mtime
+    await this.pollInboundMessages();
 
     if (currentMtime === this.lastMtime) return;
     this.lastMtime = currentMtime;
@@ -267,6 +272,51 @@ export class StateSyncAdapter {
     if (this.isRunComplete(stories)) {
       await this.handleRunComplete(stories);
     }
+  }
+
+  async pollInboundMessages(): Promise<void> {
+    // Query DynamoDB for inbound messages (SK begins with "INBOUND_MSG#")
+    const items = await this.dynamo.queryByRunId(this.config.runId, 'INBOUND_MSG#');
+
+    // Filter to only new messages (SK > last processed timestamp)
+    const newItems = items.filter(item => item.SK > `INBOUND_MSG#${this.lastInboundTimestamp}`);
+    if (newItems.length === 0) return;
+
+    // Sort by SK to process in order
+    newItems.sort((a, b) => a.SK.localeCompare(b.SK));
+
+    // Open a writable database to insert messages
+    const hiveDir = this.config.dbPath.replace(/\/hive\.db$/, '');
+    const dbClient = await getDatabase(hiveDir);
+
+    try {
+      await this.relayInboundMessages(dbClient.db, newItems);
+      dbClient.save();
+    } finally {
+      dbClient.close();
+    }
+  }
+
+  async relayInboundMessages(db: Database, items: StateItem[]): Promise<void> {
+    for (const item of items) {
+      const data = item.data;
+      createMessage(db, {
+        id: (data.id as string) || item.SK.replace('INBOUND_MSG#', ''),
+        fromSession: (data.fromSession as string) || 'web-user',
+        toSession: (data.toSession as string) || '',
+        body: (data.body as string) || '',
+        subject: (data.subject as string) || null,
+      });
+    }
+
+    // Track the last processed timestamp
+    const lastItem = items[items.length - 1];
+    this.lastInboundTimestamp = lastItem.SK.replace('INBOUND_MSG#', '');
+
+    // Delete processed items from DynamoDB
+    await this.dynamo.deleteItems(
+      items.map(item => ({ PK: item.PK, SK: item.SK }))
+    );
   }
 
   isRunComplete(stories: StoryRow[]): boolean {

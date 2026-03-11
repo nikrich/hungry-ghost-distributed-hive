@@ -1,6 +1,10 @@
 // Licensed under the Hungry Ghost Hive License. See LICENSE.
 
-import { BatchWriteItemCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import {
+  BatchWriteItemCommand,
+  DynamoDBClient,
+  QueryCommand,
+} from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 export interface StateItem {
@@ -64,6 +68,24 @@ export class DynamoClient {
     );
 
     return (result.Items || []).map(item => unmarshall(item) as StateItem);
+  }
+
+  async deleteItems(keys: Array<{ PK: string; SK: string }>): Promise<void> {
+    const chunks = this.chunkArray(keys, 25);
+
+    for (const chunk of chunks) {
+      const request = {
+        RequestItems: {
+          [this.tableName]: chunk.map(key => ({
+            DeleteRequest: {
+              Key: marshall(key),
+            },
+          })),
+        },
+      };
+
+      await this.client.send(new BatchWriteItemCommand(request));
+    }
   }
 
   static createStateItem(
