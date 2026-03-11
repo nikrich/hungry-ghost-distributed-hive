@@ -1,9 +1,10 @@
 // Licensed under the Hungry Ghost Hive License. See LICENSE.
 
+import { randomUUID } from 'crypto';
 import { statSync } from 'fs';
 import type { Database } from 'sql.js';
 import type { AgentRow, EscalationRow, PullRequestRow, StoryRow } from '../db/client.js';
-import { getReadOnlyDatabase } from '../db/client.js';
+import { getDatabase, getReadOnlyDatabase } from '../db/client.js';
 import { getAllAgents } from '../db/queries/agents.js';
 import { getAllEscalations } from '../db/queries/escalations.js';
 import { getRecentLogs } from '../db/queries/logs.js';
@@ -88,6 +89,9 @@ export class StateSyncAdapter {
   }
 
   async poll(): Promise<void> {
+    // Poll inbound messages from DynamoDB regardless of mtime
+    await this.pollInboundMessages();
+
     // Check if DB file has changed (mtime check)
     let currentMtime: number;
     try {
@@ -108,6 +112,52 @@ export class StateSyncAdapter {
       await this.syncState(dbClient.db);
     } finally {
       dbClient.close();
+    }
+  }
+
+  async pollInboundMessages(db?: Database): Promise<void> {
+    // Query DynamoDB for inbound messages with SK prefix INBOUND_MSG#
+    const items = await this.dynamo.queryByRunId(this.config.runId, 'INBOUND_MSG#');
+
+    // Filter out already-delivered messages
+    const pendingMessages = items.filter(item => item.data?.status !== 'delivered');
+    if (pendingMessages.length === 0) return;
+
+    // Use provided db or open a writable database connection
+    let dbClient: { db: Database; close: () => void } | null = null;
+    let writeDb: Database;
+
+    if (db) {
+      writeDb = db;
+    } else {
+      const hiveDir = this.config.dbPath.replace(/\/hive\.db$/, '');
+      dbClient = await getDatabase(hiveDir);
+      writeDb = dbClient.db;
+    }
+
+    try {
+      for (const item of pendingMessages) {
+        const data = item.data;
+        const messageId = (data.messageId as string) || randomUUID();
+        const fromSession = (data.fromSession as string) || 'web-ui';
+        const toSession = (data.toSession as string) || 'manager';
+        const subject = (data.subject as string) || null;
+        const body = (data.body as string) || '';
+
+        // Insert into SQLite messages table
+        writeDb.run(
+          `INSERT OR IGNORE INTO messages (id, from_session, to_session, subject, body, status, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+          [messageId, fromSession, toSession, subject, body, new Date().toISOString()]
+        );
+
+        // Mark as delivered in DynamoDB
+        await this.dynamo.markInboundMessageDelivered(this.config.runId, item.SK);
+      }
+    } finally {
+      if (dbClient) {
+        dbClient.close();
+      }
     }
   }
 

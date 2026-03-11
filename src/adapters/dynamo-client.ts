@@ -1,6 +1,6 @@
 // Licensed under the Hungry Ghost Hive License. See LICENSE.
 
-import { BatchWriteItemCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { BatchWriteItemCommand, DynamoDBClient, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 export interface StateItem {
@@ -80,6 +80,21 @@ export class DynamoClient {
       updatedAt: new Date().toISOString(),
       ttl: Math.floor(Date.now() / 1000) + TTL_30_DAYS,
     };
+  }
+
+  async markInboundMessageDelivered(runId: string, sk: string): Promise<void> {
+    await this.client.send(
+      new UpdateItemCommand({
+        TableName: this.tableName,
+        Key: marshall({ PK: `RUN#${runId}`, SK: sk }),
+        UpdateExpression: 'SET #status = :delivered, deliveredAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: marshall({
+          ':delivered': 'delivered',
+          ':now': new Date().toISOString(),
+        }),
+      })
+    );
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {
