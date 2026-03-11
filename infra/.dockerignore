@@ -1,0 +1,9 @@
+node_modules
+.git
+*.md
+.hive
+coverage
+.env
+.env.*
+dist
+infra/docker-compose*.yml
