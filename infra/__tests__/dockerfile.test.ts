@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { describe, expect, it } from 'vitest';
 
 const infraDir = join(__dirname, '..');
 const dockerfile = readFileSync(join(infraDir, 'Dockerfile'), 'utf-8');
