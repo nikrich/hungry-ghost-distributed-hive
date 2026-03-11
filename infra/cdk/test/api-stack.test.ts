@@ -1,6 +1,6 @@
-import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { ApiStack } from '../lib/api-stack';
 import { SqsStack } from '../lib/sqs-stack';
@@ -73,9 +73,17 @@ describe('ApiStack', () => {
 
     it('creates all 11 REST handler functions', () => {
       const expectedNames = [
-        'createRun', 'listRuns', 'getRun', 'cancelRun',
-        'getStories', 'getAgents', 'getLogs', 'getPRs',
-        'sendMessage', 'getSettings', 'updateSettings',
+        'createRun',
+        'listRuns',
+        'getRun',
+        'cancelRun',
+        'getStories',
+        'getAgents',
+        'getLogs',
+        'getPRs',
+        'sendMessage',
+        'getSettings',
+        'updateSettings',
       ];
       for (const name of expectedNames) {
         template.hasResourceProperties('AWS::Lambda::Function', {

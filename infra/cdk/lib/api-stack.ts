@@ -1,4 +1,3 @@
-import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -9,6 +8,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
 interface RouteConfig {
   method: apigatewayv2.HttpMethod;
@@ -34,7 +34,8 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const codePath = props.lambdaCodePath ?? path.join(__dirname, '..', '..', '..', 'src', 'api', 'handlers');
+    const codePath =
+      props.lambdaCodePath ?? path.join(__dirname, '..', '..', '..', 'src', 'api', 'handlers');
     const lambdaCode = lambda.Code.fromAsset(codePath);
 
     // ── HTTP API ──
@@ -53,17 +54,72 @@ export class ApiStack extends cdk.Stack {
     });
 
     const routes: RouteConfig[] = [
-      { method: apigatewayv2.HttpMethod.POST, path: '/api/runs', fnName: 'createRun', handler: 'createRun.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs', fnName: 'listRuns', handler: 'listRuns.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs/{id}', fnName: 'getRun', handler: 'getRun.handler' },
-      { method: apigatewayv2.HttpMethod.DELETE, path: '/api/runs/{id}', fnName: 'cancelRun', handler: 'cancelRun.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs/{id}/stories', fnName: 'getStories', handler: 'getStories.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs/{id}/agents', fnName: 'getAgents', handler: 'getAgents.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs/{id}/logs', fnName: 'getLogs', handler: 'getLogs.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/runs/{id}/prs', fnName: 'getPRs', handler: 'getPRs.handler' },
-      { method: apigatewayv2.HttpMethod.POST, path: '/api/runs/{id}/message', fnName: 'sendMessage', handler: 'sendMessage.handler' },
-      { method: apigatewayv2.HttpMethod.GET, path: '/api/settings', fnName: 'getSettings', handler: 'getSettings.handler' },
-      { method: apigatewayv2.HttpMethod.PUT, path: '/api/settings', fnName: 'updateSettings', handler: 'updateSettings.handler' },
+      {
+        method: apigatewayv2.HttpMethod.POST,
+        path: '/api/runs',
+        fnName: 'createRun',
+        handler: 'createRun.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs',
+        fnName: 'listRuns',
+        handler: 'listRuns.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs/{id}',
+        fnName: 'getRun',
+        handler: 'getRun.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.DELETE,
+        path: '/api/runs/{id}',
+        fnName: 'cancelRun',
+        handler: 'cancelRun.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs/{id}/stories',
+        fnName: 'getStories',
+        handler: 'getStories.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs/{id}/agents',
+        fnName: 'getAgents',
+        handler: 'getAgents.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs/{id}/logs',
+        fnName: 'getLogs',
+        handler: 'getLogs.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/runs/{id}/prs',
+        fnName: 'getPRs',
+        handler: 'getPRs.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.POST,
+        path: '/api/runs/{id}/message',
+        fnName: 'sendMessage',
+        handler: 'sendMessage.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.GET,
+        path: '/api/settings',
+        fnName: 'getSettings',
+        handler: 'getSettings.handler',
+      },
+      {
+        method: apigatewayv2.HttpMethod.PUT,
+        path: '/api/settings',
+        fnName: 'updateSettings',
+        handler: 'updateSettings.handler',
+      },
     ];
 
     for (const route of routes) {
