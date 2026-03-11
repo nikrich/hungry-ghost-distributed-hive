@@ -70,9 +70,7 @@ export class WebSocketBroadcaster {
 
     const result: BroadcastResult = { sent: 0, stale: 0, errors: 0 };
 
-    const postPromises = connections.map(conn =>
-      this.postToConnection(conn, message, result)
-    );
+    const postPromises = connections.map(conn => this.postToConnection(conn, message, result));
     await Promise.all(postPromises);
 
     return result;

@@ -84,10 +84,7 @@ export class WebSocketHandler {
     return { statusCode: 200 };
   }
 
-  private async handleSubscribe(
-    connectionId: string,
-    body?: string
-  ): Promise<WebSocketResponse> {
+  private async handleSubscribe(connectionId: string, body?: string): Promise<WebSocketResponse> {
     if (!body) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing request body' }) };
     }

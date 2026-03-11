@@ -53,7 +53,10 @@ class MockDynamoDBClient {
 
     if (name === 'DeleteItemCommand') {
       const key = this.unmarshallItem(cmd.input.Key as Record<string, { S?: string; N?: string }>);
-      this.deletedKeys.push({ connectionId: key.connectionId as string, runId: key.runId as string });
+      this.deletedKeys.push({
+        connectionId: key.connectionId as string,
+        runId: key.runId as string,
+      });
       return {};
     }
 
@@ -69,7 +72,9 @@ class MockDynamoDBClient {
     return result;
   }
 
-  private unmarshallItem(item: Record<string, { S?: string; N?: string }>): Record<string, unknown> {
+  private unmarshallItem(
+    item: Record<string, { S?: string; N?: string }>
+  ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(item)) {
       if (value.S !== undefined) result[key] = value.S;
@@ -84,7 +89,11 @@ class MockDynamoDBClient {
   }
 }
 
-function makeEvent(detailType: string, runId: string, data: Record<string, unknown> = {}): EventBridgeEvent {
+function makeEvent(
+  detailType: string,
+  runId: string,
+  data: Record<string, unknown> = {}
+): EventBridgeEvent {
   return {
     source: 'distributed-hive',
     'detail-type': detailType,
@@ -106,11 +115,7 @@ describe('WebSocketBroadcaster', () => {
   beforeEach(() => {
     mockDynamo = new MockDynamoDBClient();
     mockApiGw = new MockApiGatewayClient();
-    broadcaster = new WebSocketBroadcaster(
-      mockDynamo as any,
-      mockApiGw as any,
-      'test-connections'
-    );
+    broadcaster = new WebSocketBroadcaster(mockDynamo as any, mockApiGw as any, 'test-connections');
   });
 
   describe('handle', () => {

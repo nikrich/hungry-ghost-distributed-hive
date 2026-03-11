@@ -15,7 +15,9 @@ class MockDynamoDBClient {
     const name = cmd.constructor.name;
 
     if (name === 'PutItemCommand') {
-      const item = this.unmarshallItem(cmd.input.Item as Record<string, { S?: string; N?: string }>);
+      const item = this.unmarshallItem(
+        cmd.input.Item as Record<string, { S?: string; N?: string }>
+      );
       const key = `${item.connectionId}#${item.runId}`;
       this.items.set(key, item);
       return {};
@@ -23,7 +25,10 @@ class MockDynamoDBClient {
 
     if (name === 'DeleteItemCommand') {
       const key = this.unmarshallItem(cmd.input.Key as Record<string, { S?: string; N?: string }>);
-      this.deletedKeys.push({ connectionId: key.connectionId as string, runId: key.runId as string });
+      this.deletedKeys.push({
+        connectionId: key.connectionId as string,
+        runId: key.runId as string,
+      });
       const mapKey = `${key.connectionId}#${key.runId}`;
       this.items.delete(mapKey);
       return {};
@@ -39,7 +44,9 @@ class MockDynamoDBClient {
     return {};
   }
 
-  private unmarshallItem(item: Record<string, { S?: string; N?: string }>): Record<string, unknown> {
+  private unmarshallItem(
+    item: Record<string, { S?: string; N?: string }>
+  ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(item)) {
       if (value.S !== undefined) result[key] = value.S;
@@ -98,8 +105,18 @@ describe('WebSocketHandler', () => {
     it('should remove all subscriptions for a connection', async () => {
       // Set up existing subscriptions to be returned by query
       mockDynamo.queryResults.push([
-        { connectionId: 'conn-1', runId: 'run-a', connectedAt: '2026-01-01T00:00:00Z', ttl: 999999 },
-        { connectionId: 'conn-1', runId: 'run-b', connectedAt: '2026-01-01T00:00:00Z', ttl: 999999 },
+        {
+          connectionId: 'conn-1',
+          runId: 'run-a',
+          connectedAt: '2026-01-01T00:00:00Z',
+          ttl: 999999,
+        },
+        {
+          connectionId: 'conn-1',
+          runId: 'run-b',
+          connectedAt: '2026-01-01T00:00:00Z',
+          ttl: 999999,
+        },
       ]);
 
       const event = makeEvent('$disconnect', 'conn-1');
@@ -188,8 +205,18 @@ describe('WebSocketHandler', () => {
   describe('getSubscriptionsByRunId', () => {
     it('should query connections by runId using GSI', async () => {
       const expected: ConnectionRecord[] = [
-        { connectionId: 'conn-1', runId: 'run-1', connectedAt: '2026-01-01T00:00:00Z', ttl: 999999 },
-        { connectionId: 'conn-2', runId: 'run-1', connectedAt: '2026-01-01T00:00:00Z', ttl: 999999 },
+        {
+          connectionId: 'conn-1',
+          runId: 'run-1',
+          connectedAt: '2026-01-01T00:00:00Z',
+          ttl: 999999,
+        },
+        {
+          connectionId: 'conn-2',
+          runId: 'run-1',
+          connectedAt: '2026-01-01T00:00:00Z',
+          ttl: 999999,
+        },
       ];
       mockDynamo.queryResults.push(expected as unknown as Record<string, unknown>[]);
 
