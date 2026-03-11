@@ -111,6 +111,7 @@ ECS Fargate Task (Hive Instance):
 Rather than rewriting Hive's internals, the distributed version **wraps the existing Hive CLI** inside a Docker container. Hive continues to use tmux, SQLite, and git worktrees locally within the container. A **state-sync adapter** mirrors state changes to DynamoDB for the web dashboard to read.
 
 This preserves:
+
 - The scheduler's topological sorting and capacity planning
 - The manager daemon's stuck detection and escalation logic
 - All CLI runtime builders (Claude, Codex, Gemini)
@@ -138,6 +139,7 @@ This preserves:
 | `/settings` | API keys, GitHub tokens, default config |
 
 **Hosting:**
+
 - S3 bucket with static website hosting
 - CloudFront distribution with HTTPS (ACM certificate)
 - Route 53 for custom domain (optional)
@@ -149,33 +151,34 @@ This preserves:
 
 #### REST Endpoints
 
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| POST | `/api/runs` | `createRun` | Submit new requirement, enqueue Fargate task |
-| GET | `/api/runs` | `listRuns` | List all runs with status |
-| GET | `/api/runs/:id` | `getRun` | Get run details |
-| DELETE | `/api/runs/:id` | `cancelRun` | Stop ECS task, mark cancelled |
-| GET | `/api/runs/:id/stories` | `getStories` | List stories for a run |
-| GET | `/api/runs/:id/agents` | `getAgents` | List agents for a run |
-| GET | `/api/runs/:id/logs` | `getLogs` | Get agent activity logs |
-| GET | `/api/runs/:id/prs` | `getPRs` | List PRs created by agents |
-| POST | `/api/runs/:id/message` | `sendMessage` | Send message to Tech Lead |
-| PUT | `/api/settings` | `updateSettings` | Update user config/secrets |
-| GET | `/api/settings` | `getSettings` | Get current config (redacted secrets) |
+| Method | Path                    | Handler          | Description                                  |
+| ------ | ----------------------- | ---------------- | -------------------------------------------- |
+| POST   | `/api/runs`             | `createRun`      | Submit new requirement, enqueue Fargate task |
+| GET    | `/api/runs`             | `listRuns`       | List all runs with status                    |
+| GET    | `/api/runs/:id`         | `getRun`         | Get run details                              |
+| DELETE | `/api/runs/:id`         | `cancelRun`      | Stop ECS task, mark cancelled                |
+| GET    | `/api/runs/:id/stories` | `getStories`     | List stories for a run                       |
+| GET    | `/api/runs/:id/agents`  | `getAgents`      | List agents for a run                        |
+| GET    | `/api/runs/:id/logs`    | `getLogs`        | Get agent activity logs                      |
+| GET    | `/api/runs/:id/prs`     | `getPRs`         | List PRs created by agents                   |
+| POST   | `/api/runs/:id/message` | `sendMessage`    | Send message to Tech Lead                    |
+| PUT    | `/api/settings`         | `updateSettings` | Update user config/secrets                   |
+| GET    | `/api/settings`         | `getSettings`    | Get current config (redacted secrets)        |
 
 #### WebSocket API
 
-| Action | Direction | Description |
-|--------|-----------|-------------|
-| `subscribe` | Client → Server | Subscribe to run updates |
-| `story_update` | Server → Client | Story status changed |
+| Action         | Direction       | Description                   |
+| -------------- | --------------- | ----------------------------- |
+| `subscribe`    | Client → Server | Subscribe to run updates      |
+| `story_update` | Server → Client | Story status changed          |
 | `agent_update` | Server → Client | Agent spawned/completed/stuck |
-| `log_entry` | Server → Client | New activity log entry |
-| `pr_created` | Server → Client | PR submitted |
-| `run_complete` | Server → Client | All stories merged, run done |
-| `escalation` | Server → Client | Agent needs human input |
+| `log_entry`    | Server → Client | New activity log entry        |
+| `pr_created`   | Server → Client | PR submitted                  |
+| `run_complete` | Server → Client | All stories merged, run done  |
+| `escalation`   | Server → Client | Agent needs human input       |
 
 **Implementation:**
+
 - API Gateway HTTP API (cheaper than REST API)
 - Lambda functions (Node.js 20, TypeScript)
 - WebSocket connections managed via API Gateway v2
@@ -187,6 +190,7 @@ This preserves:
 **Purpose:** Decouple API from compute. Ensures runs are processed even if ECS is temporarily at capacity.
 
 **Queue configuration:**
+
 ```
 Queue: distributed-hive-runs
 Type: Standard (order doesn't matter)
@@ -196,6 +200,7 @@ Dead Letter Queue: distributed-hive-runs-dlq (after 3 failures)
 ```
 
 **Message schema:**
+
 ```json
 {
   "runId": "run-abc123",
@@ -371,13 +376,14 @@ echo "Run complete. Shutting down."
 
 #### Sizing
 
-| Tier | vCPU | Memory | Ephemeral Storage | Use Case |
-|------|------|--------|-------------------|----------|
-| Small | 2 | 8 GB | 50 GB | 1-3 stories, single team |
-| Medium | 4 | 16 GB | 100 GB | 4-10 stories, 2-3 teams |
-| Large | 8 | 32 GB | 200 GB | 10+ stories, multi-team |
+| Tier   | vCPU | Memory | Ephemeral Storage | Use Case                 |
+| ------ | ---- | ------ | ----------------- | ------------------------ |
+| Small  | 2    | 8 GB   | 50 GB             | 1-3 stories, single team |
+| Medium | 4    | 16 GB  | 100 GB            | 4-10 stories, 2-3 teams  |
+| Large  | 8    | 32 GB  | 200 GB            | 10+ stories, multi-team  |
 
 **Cost per run:**
+
 - Small: ~$0.10/hour → $0.20-0.80 per run (2-8 hours)
 - Medium: ~$0.20/hour → $0.40-1.60 per run
 - Large: ~$0.40/hour → $0.80-3.20 per run
@@ -387,6 +393,7 @@ echo "Run complete. Shutting down."
 **Purpose:** Bridge between Hive's local SQLite and DynamoDB, enabling the web dashboard to read live state without modifying Hive's core.
 
 **How it works:**
+
 1. Polls `.hive/hive.db` every 5 seconds (watches file mtime, same as dashboard)
 2. Diffs stories, agents, PRs, escalations, and logs against last known state
 3. Writes changes to DynamoDB
@@ -397,26 +404,26 @@ echo "Run complete. Shutting down."
 
 interface StateSyncConfig {
   runId: string;
-  dbPath: string;          // .hive/hive.db
-  dynamoTable: string;     // distributed-hive-state
-  eventBusName: string;    // distributed-hive-events
-  pollIntervalMs: number;  // 5000
+  dbPath: string; // .hive/hive.db
+  dynamoTable: string; // distributed-hive-state
+  eventBusName: string; // distributed-hive-events
+  pollIntervalMs: number; // 5000
 }
 
 // DynamoDB item structure
 interface StateItem {
-  PK: string;        // "RUN#run-abc123"
-  SK: string;        // "STORY#STR-001" | "AGENT#senior-1" | "LOG#12345"
-  type: string;      // "story" | "agent" | "pr" | "escalation" | "log"
-  data: Record<string, any>;  // Full row from SQLite
+  PK: string; // "RUN#run-abc123"
+  SK: string; // "STORY#STR-001" | "AGENT#senior-1" | "LOG#12345"
+  type: string; // "story" | "agent" | "pr" | "escalation" | "log"
+  data: Record<string, any>; // Full row from SQLite
   updatedAt: string; // ISO timestamp
-  ttl: number;       // Auto-delete after 30 days
+  ttl: number; // Auto-delete after 30 days
 }
 
 // EventBridge event structure
 interface HiveEvent {
-  source: "distributed-hive";
-  detailType: "story_update" | "agent_update" | "pr_created" | "run_complete";
+  source: 'distributed-hive';
+  detailType: 'story_update' | 'agent_update' | 'pr_created' | 'run_complete';
   detail: {
     runId: string;
     entityType: string;
@@ -450,6 +457,7 @@ GSI2: status-index
 **Purpose:** Push real-time updates to connected WebSocket clients.
 
 **Flow:**
+
 ```
 State Sync Adapter
   → EventBridge (distributed-hive-events bus)
@@ -459,6 +467,7 @@ State Sync Adapter
 ```
 
 **WebSocket broadcaster Lambda:**
+
 ```typescript
 // Reads connection IDs from DynamoDB connections table
 // Filters by runId subscription
@@ -472,6 +481,7 @@ State Sync Adapter
 **Purpose:** Persist git repos and hive state across container restarts (if a task fails and retries).
 
 **Mount structure:**
+
 ```
 /efs/
 ├── runs/
@@ -484,6 +494,7 @@ State Sync Adapter
 ```
 
 **Configuration:**
+
 - Throughput mode: Bursting (sufficient for git operations)
 - Performance mode: General Purpose
 - Lifecycle policy: Transition to IA after 7 days
@@ -520,6 +531,7 @@ State Sync Adapter
 | `EstimatedCost` | Fargate + API cost per run | > $50 (alert) |
 
 **Logs:**
+
 - Container stdout/stderr → CloudWatch Logs
 - State sync events → CloudWatch Logs
 - API Gateway access logs → CloudWatch Logs
@@ -573,17 +585,17 @@ When a user sends a message via the web UI (e.g., answering an escalation):
 
 ### 4.3 Run Lifecycle Events
 
-| Event | Trigger | Action |
-|-------|---------|--------|
-| `run_started` | Entrypoint begins | Write RUN meta to DynamoDB |
-| `stories_created` | Tech Lead finishes analysis | Sync all stories |
-| `agent_spawned` | Scheduler assigns story | Sync agent record |
-| `story_progress` | Agent logs progress | Sync story + logs |
-| `pr_created` | Agent submits PR | Sync PR record |
-| `escalation` | Agent can't proceed | Sync escalation, notify user |
-| `story_merged` | QA approves, PR merged | Sync story status |
-| `run_complete` | All stories merged | Write completion, emit event |
-| `run_failed` | Unrecoverable error | Write failure reason, emit event |
+| Event             | Trigger                     | Action                           |
+| ----------------- | --------------------------- | -------------------------------- |
+| `run_started`     | Entrypoint begins           | Write RUN meta to DynamoDB       |
+| `stories_created` | Tech Lead finishes analysis | Sync all stories                 |
+| `agent_spawned`   | Scheduler assigns story     | Sync agent record                |
+| `story_progress`  | Agent logs progress         | Sync story + logs                |
+| `pr_created`      | Agent submits PR            | Sync PR record                   |
+| `escalation`      | Agent can't proceed         | Sync escalation, notify user     |
+| `story_merged`    | QA approves, PR merged      | Sync story status                |
+| `run_complete`    | All stories merged          | Write completion, emit event     |
+| `run_failed`      | Unrecoverable error         | Write failure reason, emit event |
 
 ### 4.4 Completion Detection
 
@@ -604,6 +616,7 @@ function isRunComplete(db: Database): boolean {
 ```
 
 When complete:
+
 1. Write final state snapshot to DynamoDB
 2. Emit `run_complete` event
 3. Export agent logs to S3 for long-term storage
@@ -615,18 +628,19 @@ When complete:
 
 ### 5.1 Technology Stack
 
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| Framework | React 18 + TypeScript | Industry standard, large ecosystem |
-| Styling | Tailwind CSS | Rapid UI development |
-| State | Zustand | Lightweight, WebSocket-friendly |
-| Routing | React Router v6 | Standard SPA routing |
-| Build | Vite | Fast builds, good DX |
-| Auth | Cognito (optional) or API key | Simple auth for v1 |
+| Layer     | Technology                    | Rationale                          |
+| --------- | ----------------------------- | ---------------------------------- |
+| Framework | React 18 + TypeScript         | Industry standard, large ecosystem |
+| Styling   | Tailwind CSS                  | Rapid UI development               |
+| State     | Zustand                       | Lightweight, WebSocket-friendly    |
+| Routing   | React Router v6               | Standard SPA routing               |
+| Build     | Vite                          | Fast builds, good DX               |
+| Auth      | Cognito (optional) or API key | Simple auth for v1                 |
 
 ### 5.2 Dashboard Views
 
 #### Run List View (`/`)
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Distributed Hive                    [+ New Run]    │
@@ -649,6 +663,7 @@ When complete:
 ```
 
 #### Live Run View (`/run/:id`)
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │  ← Back    Add OAuth login              [Cancel]    │
@@ -681,6 +696,7 @@ When complete:
 ```
 
 #### Submit Run View (`/submit`)
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │  New Run                                            │
@@ -725,25 +741,27 @@ function useRunUpdates(runId: string) {
     ws.current = new WebSocket(`wss://api.distributed-hive.com/ws`);
 
     ws.current.onopen = () => {
-      ws.current.send(JSON.stringify({
-        action: "subscribe",
-        runId
-      }));
+      ws.current.send(
+        JSON.stringify({
+          action: 'subscribe',
+          runId,
+        })
+      );
     };
 
-    ws.current.onmessage = (event) => {
+    ws.current.onmessage = event => {
       const update = JSON.parse(event.data);
       switch (update.type) {
-        case "story_update":
+        case 'story_update':
           updateStory(update.data);
           break;
-        case "agent_update":
+        case 'agent_update':
           updateAgent(update.data);
           break;
-        case "escalation":
+        case 'escalation':
           showEscalation(update.data);
           break;
-        case "run_complete":
+        case 'run_complete':
           markComplete(update.data);
           break;
       }
@@ -761,6 +779,7 @@ function useRunUpdates(runId: string) {
 ### 6.1 IAM Roles
 
 **ECS Task Execution Role** (`hive-execution-role`):
+
 ```json
 {
   "Effect": "Allow",
@@ -776,6 +795,7 @@ function useRunUpdates(runId: string) {
 ```
 
 **ECS Task Role** (`hive-task-role`):
+
 ```json
 {
   "Effect": "Allow",
@@ -800,6 +820,7 @@ function useRunUpdates(runId: string) {
 ```
 
 **API Lambda Role** (`hive-api-role`):
+
 ```json
 {
   "Effect": "Allow",
@@ -853,67 +874,69 @@ VPC: distributed-hive-vpc (10.0.0.0/16)
 
 ### 7.1 Fixed Monthly Costs (Always On)
 
-| Service | Configuration | Monthly Cost |
-|---------|---------------|--------------|
-| CloudFront | Standard distribution | $1 |
-| S3 | Static website bucket | $0.50 |
-| API Gateway | HTTP API + WebSocket | $1-3 |
-| DynamoDB | On-demand, ~1GB storage | $1-5 |
-| EFS | 10GB with IA lifecycle | $3-5 |
-| Secrets Manager | 4 secrets | $1.60 |
-| CloudWatch | Logs + metrics | $3-5 |
-| NAT Gateway | Single AZ | $32 |
-| ECR | Docker image storage | $1 |
-| **Total fixed** | | **~$45-55/month** |
+| Service         | Configuration           | Monthly Cost      |
+| --------------- | ----------------------- | ----------------- |
+| CloudFront      | Standard distribution   | $1                |
+| S3              | Static website bucket   | $0.50             |
+| API Gateway     | HTTP API + WebSocket    | $1-3              |
+| DynamoDB        | On-demand, ~1GB storage | $1-5              |
+| EFS             | 10GB with IA lifecycle  | $3-5              |
+| Secrets Manager | 4 secrets               | $1.60             |
+| CloudWatch      | Logs + metrics          | $3-5              |
+| NAT Gateway     | Single AZ               | $32               |
+| ECR             | Docker image storage    | $1                |
+| **Total fixed** |                         | **~$45-55/month** |
 
 > **Note:** NAT Gateway is the largest fixed cost. For lower costs, use a NAT instance ($3-5/month) or VPC endpoints instead.
 
 ### 7.2 Per-Run Variable Costs
 
-| Component | Rate | Typical Run | Heavy Run |
-|-----------|------|-------------|-----------|
-| Fargate (4 vCPU, 16GB) | $0.20/hour | $0.60 (3h) | $1.60 (8h) |
-| DynamoDB writes | $1.25/million | $0.01 | $0.05 |
-| EventBridge events | $1/million | $0.001 | $0.01 |
-| CloudWatch logs | $0.50/GB | $0.05 | $0.20 |
-| EFS storage | $0.30/GB-month | $0.03 | $0.10 |
-| **Total per run** | | **~$0.70** | **~$2.00** |
+| Component              | Rate           | Typical Run | Heavy Run  |
+| ---------------------- | -------------- | ----------- | ---------- |
+| Fargate (4 vCPU, 16GB) | $0.20/hour     | $0.60 (3h)  | $1.60 (8h) |
+| DynamoDB writes        | $1.25/million  | $0.01       | $0.05      |
+| EventBridge events     | $1/million     | $0.001      | $0.01      |
+| CloudWatch logs        | $0.50/GB       | $0.05       | $0.20      |
+| EFS storage            | $0.30/GB-month | $0.03       | $0.10      |
+| **Total per run**      |                | **~$0.70**  | **~$2.00** |
 
 ### 7.3 LLM API Costs (Dominant, Same Whether Local or Cloud)
 
-| Model | Input | Output | Typical Story Cost |
-|-------|-------|--------|-------------------|
-| Claude Opus 4.6 | $15/M tokens | $75/M tokens | $5-30 |
-| Claude Sonnet 4.6 | $3/M tokens | $15/M tokens | $1-5 |
-| Claude Haiku 4.5 | $0.80/M tokens | $4/M tokens | $0.20-1 |
-| GPT-5.2 Codex | $2/M tokens | $8/M tokens | $0.50-3 |
+| Model             | Input          | Output       | Typical Story Cost |
+| ----------------- | -------------- | ------------ | ------------------ |
+| Claude Opus 4.6   | $15/M tokens   | $75/M tokens | $5-30              |
+| Claude Sonnet 4.6 | $3/M tokens    | $15/M tokens | $1-5               |
+| Claude Haiku 4.5  | $0.80/M tokens | $4/M tokens  | $0.20-1            |
+| GPT-5.2 Codex     | $2/M tokens    | $8/M tokens  | $0.50-3            |
 
 ### 7.4 Monthly Cost Projections
 
-| Usage Level | Runs/Month | AWS Infra | LLM API | Total |
-|-------------|-----------|-----------|---------|-------|
-| Light | 5 | ~$50 | $25-75 | **$75-125** |
-| Moderate | 20 | ~$60 | $100-300 | **$160-360** |
-| Heavy | 50 | ~$85 | $250-750 | **$335-835** |
+| Usage Level | Runs/Month | AWS Infra | LLM API  | Total        |
+| ----------- | ---------- | --------- | -------- | ------------ |
+| Light       | 5          | ~$50      | $25-75   | **$75-125**  |
+| Moderate    | 20         | ~$60      | $100-300 | **$160-360** |
+| Heavy       | 50         | ~$85      | $250-750 | **$335-835** |
 
 ### 7.5 Cost Optimization Options
 
-| Optimization | Savings | Trade-off |
-|--------------|---------|-----------|
-| Use Fargate Spot | 70% on compute | Tasks can be interrupted |
-| Use NAT instance instead of NAT Gateway | ~$28/month | Manual management |
-| Use Sonnet instead of Opus for juniors | 80% on junior LLM costs | Slightly lower quality |
-| Cache repo clones on EFS | ~30% faster startup | Storage cost |
-| DynamoDB reserved capacity | 50% on DynamoDB | Commitment |
+| Optimization                            | Savings                 | Trade-off                |
+| --------------------------------------- | ----------------------- | ------------------------ |
+| Use Fargate Spot                        | 70% on compute          | Tasks can be interrupted |
+| Use NAT instance instead of NAT Gateway | ~$28/month              | Manual management        |
+| Use Sonnet instead of Opus for juniors  | 80% on junior LLM costs | Slightly lower quality   |
+| Cache repo clones on EFS                | ~30% faster startup     | Storage cost             |
+| DynamoDB reserved capacity              | 50% on DynamoDB         | Commitment               |
 
 ---
 
 ## 8. Implementation Phases
 
 ### Phase 1: Container & Entrypoint (Week 1)
+
 **Goal:** Run Hive in a Docker container that processes a requirement end-to-end.
 
 **Deliverables:**
+
 - [ ] Dockerfile with tmux, git, Claude CLI, Hive pre-installed
 - [ ] Entrypoint script that initializes workspace, clones repos, runs Hive
 - [ ] Docker Compose file for local testing
@@ -921,6 +944,7 @@ VPC: distributed-hive-vpc (10.0.0.0/16)
 - [ ] Test: submit a requirement locally in Docker, verify PRs are created
 
 **Files:**
+
 ```
 infra/
 ├── Dockerfile
@@ -930,9 +954,11 @@ infra/
 ```
 
 ### Phase 2: State Sync Adapter (Week 2)
+
 **Goal:** Mirror Hive's SQLite state to DynamoDB in real-time.
 
 **Deliverables:**
+
 - [ ] State sync adapter (TypeScript, runs as sidecar process)
 - [ ] DynamoDB table creation (CloudFormation/CDK)
 - [ ] EventBridge event bus + rules
@@ -941,6 +967,7 @@ infra/
 - [ ] Test: run Hive in Docker, verify state appears in DynamoDB
 
 **Files:**
+
 ```
 src/adapters/
 ├── state-sync.ts
@@ -953,9 +980,11 @@ infra/cdk/
 ```
 
 ### Phase 3: API Layer (Week 3)
+
 **Goal:** REST API for submitting runs and querying state.
 
 **Deliverables:**
+
 - [ ] Lambda functions for all API endpoints
 - [ ] API Gateway HTTP API configuration
 - [ ] SQS queue for run requests
@@ -965,6 +994,7 @@ infra/cdk/
 - [ ] Test: submit run via API, verify Fargate task starts
 
 **Files:**
+
 ```
 src/api/
 ├── handlers/
@@ -988,9 +1018,11 @@ infra/cdk/
 ```
 
 ### Phase 4: Web Dashboard (Week 4-5)
+
 **Goal:** Browser-based UI for managing runs.
 
 **Deliverables:**
+
 - [ ] React app with Vite + TypeScript + Tailwind
 - [ ] Run list view with status indicators
 - [ ] Submit run form with repo picker and config options
@@ -1001,6 +1033,7 @@ infra/cdk/
 - [ ] Test: full end-to-end flow from browser
 
 **Files:**
+
 ```
 web/
 ├── src/
@@ -1028,9 +1061,11 @@ web/
 ```
 
 ### Phase 5: Infrastructure as Code (Week 5-6)
+
 **Goal:** Fully automated deployment with CDK.
 
 **Deliverables:**
+
 - [ ] CDK app with all stacks (VPC, ECS, DynamoDB, API, S3/CloudFront)
 - [ ] CI/CD pipeline (GitHub Actions → ECR push → CDK deploy)
 - [ ] CloudWatch dashboards and alarms
@@ -1039,6 +1074,7 @@ web/
 - [ ] Test: deploy from scratch to new AWS account
 
 **Files:**
+
 ```
 infra/cdk/
 ├── bin/app.ts
@@ -1057,9 +1093,11 @@ infra/cdk/
 ```
 
 ### Phase 6: Hardening & Multi-Tenancy (Week 6-7)
+
 **Goal:** Production readiness.
 
 **Deliverables:**
+
 - [ ] Authentication (Cognito user pool or API key auth)
 - [ ] Per-user secret isolation
 - [ ] EFS access points per user
@@ -1076,29 +1114,29 @@ infra/cdk/
 
 ### 9.1 Fargate Task Crash
 
-| Scenario | Detection | Recovery |
-|----------|-----------|----------|
-| OOM kill | ECS task stopped event | Retry with larger memory tier |
-| Claude CLI crash | Manager detects dead tmux session | Manager restarts agent with `--resume` |
-| Network timeout | Git/API call fails | Agent retries (built into Hive) |
-| Spot interruption | SIGTERM → 120s grace | Save state to EFS, retry on-demand |
-| Unhandled exception | Process exit code ≠ 0 | SQS redelivers (up to 3 retries) |
+| Scenario            | Detection                         | Recovery                               |
+| ------------------- | --------------------------------- | -------------------------------------- |
+| OOM kill            | ECS task stopped event            | Retry with larger memory tier          |
+| Claude CLI crash    | Manager detects dead tmux session | Manager restarts agent with `--resume` |
+| Network timeout     | Git/API call fails                | Agent retries (built into Hive)        |
+| Spot interruption   | SIGTERM → 120s grace              | Save state to EFS, retry on-demand     |
+| Unhandled exception | Process exit code ≠ 0             | SQS redelivers (up to 3 retries)       |
 
 ### 9.2 State Sync Failure
 
-| Scenario | Detection | Recovery |
-|----------|-----------|----------|
-| DynamoDB throttle | SDK error | Exponential backoff (built-in) |
-| Adapter crash | No heartbeat in DynamoDB | Entrypoint restarts adapter |
-| Stale data | Dashboard shows old state | Manual refresh triggers full re-sync |
+| Scenario          | Detection                 | Recovery                             |
+| ----------------- | ------------------------- | ------------------------------------ |
+| DynamoDB throttle | SDK error                 | Exponential backoff (built-in)       |
+| Adapter crash     | No heartbeat in DynamoDB  | Entrypoint restarts adapter          |
+| Stale data        | Dashboard shows old state | Manual refresh triggers full re-sync |
 
 ### 9.3 API Failures
 
-| Scenario | Detection | Recovery |
-|----------|-----------|----------|
-| Lambda timeout | API Gateway 504 | Client retry with backoff |
-| WebSocket disconnect | Client heartbeat | Auto-reconnect + state catch-up |
-| SQS message lost | DLQ monitoring | CloudWatch alarm, manual resubmit |
+| Scenario             | Detection        | Recovery                          |
+| -------------------- | ---------------- | --------------------------------- |
+| Lambda timeout       | API Gateway 504  | Client retry with backoff         |
+| WebSocket disconnect | Client heartbeat | Auto-reconnect + state catch-up   |
+| SQS message lost     | DLQ monitoring   | CloudWatch alarm, manual resubmit |
 
 ### 9.4 Data Loss Prevention
 
@@ -1111,32 +1149,32 @@ infra/cdk/
 
 ## 10. Future Enhancements (Post-MVP)
 
-| Enhancement | Description | Complexity |
-|-------------|-------------|------------|
-| **GitHub App** | Install as GitHub App for automatic repo access | Medium |
-| **Slack integration** | Notifications and escalation responses via Slack | Low |
-| **Run templates** | Save and reuse requirement + config combinations | Low |
-| **Cost budgets** | Set per-run or monthly LLM spending limits | Medium |
-| **Agent streaming** | Stream agent terminal output to browser (ttyd-style) | High |
-| **Multi-region** | Deploy to multiple regions for lower latency | High |
-| **Custom models** | Support self-hosted LLMs (Bedrock, SageMaker) | Medium |
-| **Run comparison** | Compare two runs (A/B testing different models) | Medium |
-| **Webhook triggers** | Start runs from GitHub issues or Jira tickets | Low |
-| **Team sharing** | Multiple users collaborate on same runs | High |
+| Enhancement           | Description                                          | Complexity |
+| --------------------- | ---------------------------------------------------- | ---------- |
+| **GitHub App**        | Install as GitHub App for automatic repo access      | Medium     |
+| **Slack integration** | Notifications and escalation responses via Slack     | Low        |
+| **Run templates**     | Save and reuse requirement + config combinations     | Low        |
+| **Cost budgets**      | Set per-run or monthly LLM spending limits           | Medium     |
+| **Agent streaming**   | Stream agent terminal output to browser (ttyd-style) | High       |
+| **Multi-region**      | Deploy to multiple regions for lower latency         | High       |
+| **Custom models**     | Support self-hosted LLMs (Bedrock, SageMaker)        | Medium     |
+| **Run comparison**    | Compare two runs (A/B testing different models)      | Medium     |
+| **Webhook triggers**  | Start runs from GitHub issues or Jira tickets        | Low        |
+| **Team sharing**      | Multiple users collaborate on same runs              | High       |
 
 ---
 
 ## 11. Decision Log
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Keep Hive intact vs. rewrite | **Keep intact** | 90% less work; proven orchestration logic |
-| SQLite vs. replace with RDS | **Keep SQLite + sync adapter** | No core changes needed; DynamoDB for reads |
-| ECS Fargate vs. EC2 | **Fargate** | No server management; per-second billing |
-| DynamoDB vs. RDS for state | **DynamoDB** | Serverless, pay-per-use, good for key-value reads |
-| React vs. Next.js | **React (SPA)** | No SSR needed; simpler deployment to S3 |
-| CDK vs. Terraform vs. SAM | **CDK** | TypeScript consistency; good ECS/Lambda support |
-| WebSocket vs. polling | **WebSocket** | Real-time UX; minimal cost |
-| Cognito vs. custom auth | **API key for v1** | Simpler; Cognito for multi-tenant later |
-| NAT Gateway vs. NAT instance | **NAT Gateway** | Reliable; switch to NAT instance if cost matters |
-| Single vs. multi container | **Single container** | Simpler; Hive expects all tools co-located |
+| Decision                     | Choice                         | Rationale                                         |
+| ---------------------------- | ------------------------------ | ------------------------------------------------- |
+| Keep Hive intact vs. rewrite | **Keep intact**                | 90% less work; proven orchestration logic         |
+| SQLite vs. replace with RDS  | **Keep SQLite + sync adapter** | No core changes needed; DynamoDB for reads        |
+| ECS Fargate vs. EC2          | **Fargate**                    | No server management; per-second billing          |
+| DynamoDB vs. RDS for state   | **DynamoDB**                   | Serverless, pay-per-use, good for key-value reads |
+| React vs. Next.js            | **React (SPA)**                | No SSR needed; simpler deployment to S3           |
+| CDK vs. Terraform vs. SAM    | **CDK**                        | TypeScript consistency; good ECS/Lambda support   |
+| WebSocket vs. polling        | **WebSocket**                  | Real-time UX; minimal cost                        |
+| Cognito vs. custom auth      | **API key for v1**             | Simpler; Cognito for multi-tenant later           |
+| NAT Gateway vs. NAT instance | **NAT Gateway**                | Reliable; switch to NAT instance if cost matters  |
+| Single vs. multi container   | **Single container**           | Simpler; Hive expects all tools co-located        |
