@@ -384,17 +384,15 @@ describe('RunView', () => {
 
     it('hides resolved escalations', () => {
       seedStore();
-      useRunStore
-        .getState()
-        .setEscalations([
-          {
-            id: 'esc-1',
-            storyId: 'STR-004',
-            message: 'Ambiguous requirement - which OAuth provider?',
-            timestamp: new Date().toISOString(),
-            resolved: true,
-          },
-        ]);
+      useRunStore.getState().setEscalations([
+        {
+          id: 'esc-1',
+          storyId: 'STR-004',
+          message: 'Ambiguous requirement - which OAuth provider?',
+          timestamp: new Date().toISOString(),
+          resolved: true,
+        },
+      ]);
       renderRunView();
       expect(screen.queryByText(/Ambiguous requirement/)).not.toBeInTheDocument();
     });
