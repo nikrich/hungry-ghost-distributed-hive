@@ -148,7 +148,12 @@ describe('Dashboard', () => {
   });
 
   it('treats pending status as active', () => {
-    const pendingRun: Run = { ...activeRun, id: 'run-pending', title: 'Pending Run', status: 'pending' };
+    const pendingRun: Run = {
+      ...activeRun,
+      id: 'run-pending',
+      title: 'Pending Run',
+      status: 'pending',
+    };
     useRunStore.getState().setRuns([pendingRun]);
     renderDashboard();
     const activeSection = screen.getByRole('heading', { name: 'Active Runs' }).closest('section')!;
@@ -157,18 +162,32 @@ describe('Dashboard', () => {
   });
 
   it('treats failed status as completed', () => {
-    const failedRun: Run = { ...completedRun, id: 'run-failed', title: 'Failed Run', status: 'failed' };
+    const failedRun: Run = {
+      ...completedRun,
+      id: 'run-failed',
+      title: 'Failed Run',
+      status: 'failed',
+    };
     useRunStore.getState().setRuns([failedRun]);
     renderDashboard();
-    const completedSection = screen.getByRole('heading', { name: 'Recent Completed' }).closest('section')!;
+    const completedSection = screen
+      .getByRole('heading', { name: 'Recent Completed' })
+      .closest('section')!;
     expect(completedSection).toHaveTextContent('Failed Run');
   });
 
   it('treats cancelled status as completed', () => {
-    const cancelledRun: Run = { ...completedRun, id: 'run-cancelled', title: 'Cancelled Run', status: 'cancelled' };
+    const cancelledRun: Run = {
+      ...completedRun,
+      id: 'run-cancelled',
+      title: 'Cancelled Run',
+      status: 'cancelled',
+    };
     useRunStore.getState().setRuns([cancelledRun]);
     renderDashboard();
-    const completedSection = screen.getByRole('heading', { name: 'Recent Completed' }).closest('section')!;
+    const completedSection = screen
+      .getByRole('heading', { name: 'Recent Completed' })
+      .closest('section')!;
     expect(completedSection).toHaveTextContent('Cancelled Run');
   });
 
