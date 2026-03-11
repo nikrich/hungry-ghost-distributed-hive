@@ -20,13 +20,9 @@ export class FrontendStack extends cdk.Stack {
     });
 
     // CloudFront Origin Access Identity
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(
-      this,
-      'OriginAccessIdentity',
-      {
-        comment: 'OAI for distributed-hive frontend',
-      }
-    );
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OriginAccessIdentity', {
+      comment: 'OAI for distributed-hive frontend',
+    });
 
     this.bucket.grantRead(originAccessIdentity);
 
