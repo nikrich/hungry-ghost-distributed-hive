@@ -52,7 +52,7 @@ export function withAuth(handler: LambdaHandler): LambdaHandler {
           const userData = (await userResponse.json()) as { login: string };
           // Attach user info to request context for downstream handlers
           if (!event.requestContext.authorizer) {
-            (event.requestContext as Record<string, unknown>).authorizer = {};
+            (event.requestContext as unknown as Record<string, unknown>).authorizer = {};
           }
           (event.requestContext.authorizer as Record<string, string>).principalId = userData.login;
           return handler(event);
