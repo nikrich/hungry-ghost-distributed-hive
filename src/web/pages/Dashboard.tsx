@@ -1,13 +1,11 @@
-import { Link } from "react-router-dom";
-import { useRunStore } from "../stores/runStore";
-import type { Run } from "../types";
+import { Link } from 'react-router-dom';
+import { useRunStore } from '../stores/runStore';
+import type { Run } from '../types';
 
 function RunCard({ run }: { run: Run }) {
-  const isActive = run.status === "running" || run.status === "pending";
-  const storiesDone = run.stories.filter(
-    (s) => s.status === "done" || s.status === "merged",
-  ).length;
-  const agentsActive = run.agents.filter((a) => a.status === "working").length;
+  const isActive = run.status === 'running' || run.status === 'pending';
+  const storiesDone = run.stories.filter(s => s.status === 'done' || s.status === 'merged').length;
+  const agentsActive = run.agents.filter(a => a.status === 'working').length;
 
   return (
     <Link
@@ -18,7 +16,7 @@ function RunCard({ run }: { run: Run }) {
         <div className="flex items-center gap-2">
           <span
             className={`w-2 h-2 rounded-full ${
-              isActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+              isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
             }`}
           />
           <h3 className="font-medium text-gray-900">{run.title}</h3>
@@ -30,9 +28,7 @@ function RunCard({ run }: { run: Run }) {
       <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
         <span>{run.repositories.length} repos</span>
         {isActive && <span>{agentsActive} agents active</span>}
-        {run.estimatedCost != null && (
-          <span>~${run.estimatedCost.toFixed(2)}</span>
-        )}
+        {run.estimatedCost != null && <span>~${run.estimatedCost.toFixed(2)}</span>}
         {!isActive && run.completedAt && (
           <span>Completed {new Date(run.completedAt).toLocaleDateString()}</span>
         )}
@@ -42,12 +38,10 @@ function RunCard({ run }: { run: Run }) {
 }
 
 export function Dashboard() {
-  const runs = useRunStore((s) => s.runs);
-  const activeRuns = runs.filter(
-    (r) => r.status === "running" || r.status === "pending",
-  );
+  const runs = useRunStore(s => s.runs);
+  const activeRuns = runs.filter(r => r.status === 'running' || r.status === 'pending');
   const completedRuns = runs.filter(
-    (r) => r.status === "completed" || r.status === "failed" || r.status === "cancelled",
+    r => r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled'
   );
 
   return (
@@ -68,7 +62,7 @@ export function Dashboard() {
           <p className="text-gray-500 text-sm">No active runs.</p>
         ) : (
           <div className="space-y-3">
-            {activeRuns.map((run) => (
+            {activeRuns.map(run => (
               <RunCard key={run.id} run={run} />
             ))}
           </div>
@@ -81,7 +75,7 @@ export function Dashboard() {
           <p className="text-gray-500 text-sm">No completed runs yet.</p>
         ) : (
           <div className="space-y-3">
-            {completedRuns.map((run) => (
+            {completedRuns.map(run => (
               <RunCard key={run.id} run={run} />
             ))}
           </div>
