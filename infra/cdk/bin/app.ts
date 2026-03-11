@@ -2,6 +2,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { EcsStack } from '../lib/ecs-stack';
 import { IamStack } from '../lib/iam-stack';
+import { MonitoringStack } from '../lib/monitoring-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { VpcStack } from '../lib/vpc-stack';
 
@@ -40,5 +41,12 @@ const iamStack = new IamStack(app, 'DistributedHiveIam', {
   taskDefinitionArn: ecsStack.taskDefinition.taskDefinitionArn,
 });
 iamStack.addDependency(ecsStack);
+
+const monitoringStack = new MonitoringStack(app, 'DistributedHiveMonitoring', {
+  env,
+  clusterName: ecsStack.cluster.clusterName,
+  tableName: storageStack.table.tableName,
+});
+monitoringStack.addDependency(ecsStack);
 
 app.synth();
