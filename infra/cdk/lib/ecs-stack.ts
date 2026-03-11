@@ -61,12 +61,19 @@ export class EcsStack extends cdk.Stack {
       ],
     });
 
-    // ECS Fargate cluster
+    // ECS Fargate cluster with Spot capacity provider
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: props.vpc,
       clusterName: 'distributed-hive',
       containerInsights: true,
+      enableFargateCapacityProviders: true,
     });
+
+    // Default capacity provider strategy: prefer Spot with on-demand fallback
+    this.cluster.addDefaultCapacityProviderStrategy([
+      { capacityProvider: 'FARGATE_SPOT', weight: 3, base: 0 },
+      { capacityProvider: 'FARGATE', weight: 1, base: 1 },
+    ]);
 
     // Execution role — least-privilege inline policy (no managed policy)
     const executionRole = new iam.Role(this, 'ExecutionRole', {
@@ -206,7 +213,9 @@ export class EcsStack extends cdk.Stack {
       environment: {
         DYNAMODB_TABLE: 'distributed-hive-state',
         EVENTBRIDGE_BUS: props.eventBusName,
+        RUN_TIMEOUT_SECONDS: '86400', // 24 hours max run time
       },
+      stopTimeout: cdk.Duration.seconds(120),
       secrets: {
         ANTHROPIC_API_KEY: ecs.Secret.fromSecretsManager(anthropicKeySecret),
         GITHUB_TOKEN: ecs.Secret.fromSecretsManager(githubTokenSecret),

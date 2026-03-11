@@ -1,0 +1,52 @@
+services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - '4566:4566'
+    environment:
+      SERVICES: dynamodb,sqs,events,s3,secretsmanager,ecs,iam,sts,logs
+      DEFAULT_REGION: af-south-1
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infra/localstack-init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4566/_localstack/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hive:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    environment:
+      LOCAL_MODE: 'true'
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: af-south-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-sk-ant-test-key}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-ghp_test_token}
+      RUN_ID: ${RUN_ID:-local-run-001}
+      DYNAMODB_TABLE: distributed-hive-state
+      DYNAMODB_ENDPOINT: http://localstack:4566
+      EVENTBRIDGE_BUS: distributed-hive-events
+      REPO_URLS: ${REPO_URLS:-[]}
+      REQUIREMENT_TITLE: ${REQUIREMENT_TITLE:-Local test run}
+      REQUIREMENT_DESCRIPTION: ${REQUIREMENT_DESCRIPTION:-Testing the distributed hive locally}
+      HIVE_CONFIG_OVERRIDE: ${HIVE_CONFIG_OVERRIDE:-}
+      RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-86400}
+    volumes:
+      - hive-workspace:/workspace
+      - hive-agent-logs:/opt/hive/logs
+    depends_on:
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  localstack-data:
+  hive-workspace:
+  hive-agent-logs:
