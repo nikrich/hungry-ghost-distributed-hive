@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
+import { ApiStack } from '../lib/api-stack';
 import { EcsStack } from '../lib/ecs-stack';
+import { FrontendStack } from '../lib/frontend-stack';
+import { SqsStack } from '../lib/sqs-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { VpcStack } from '../lib/vpc-stack';
 
@@ -20,6 +23,17 @@ const storageStack = new StorageStack(app, 'DistributedHiveStorage', {
 });
 storageStack.addDependency(vpcStack);
 
+const sqsStack = new SqsStack(app, 'DistributedHiveSqs', { env });
+
+const apiStack = new ApiStack(app, 'DistributedHiveApi', {
+  env,
+  table: storageStack.table,
+  queue: sqsStack.queue,
+  eventBusName: storageStack.eventBusName,
+});
+apiStack.addDependency(storageStack);
+apiStack.addDependency(sqsStack);
+
 const ecsStack = new EcsStack(app, 'DistributedHiveEcs', {
   env,
   vpc: vpcStack.vpc,
@@ -30,5 +44,7 @@ const ecsStack = new EcsStack(app, 'DistributedHiveEcs', {
   eventBusName: storageStack.eventBusName,
 });
 ecsStack.addDependency(storageStack);
+
+const frontendStack = new FrontendStack(app, 'DistributedHiveFrontend', { env });
 
 app.synth();
