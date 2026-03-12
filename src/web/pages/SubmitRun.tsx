@@ -25,12 +25,12 @@ export function SubmitRun() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = await post<{ id: string }>('/api/runs', {
+      const data = await post<{ runId: string }>('/api/runs', {
         title, description,
         repositories: repositories.filter(Boolean),
         model, sizeTier,
       });
-      navigate(`/run/${data.id}`);
+      navigate(`/run/${data.runId}`);
     } finally {
       setSubmitting(false);
     }
