@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.48.0](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/compare/hungry-ghost-hive-v0.47.1...hungry-ghost-hive-v0.48.0) (2026-03-12)
+
+
+### Features
+
+* add CDK monitoring stack and CI/CD pipelines ([#24](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/24)) ([8d34554](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/8d3455454db7a8a15c88afa08f8af1430332a4c6))
+* add CDK stacks for API Gateway, SQS, EventBridge, and frontend ([#22](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/22)) ([305f7c7](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/305f7c76036a561892c8f4155c20e353e2c2bb3f))
+* add CDK stacks for VPC, ECS, and storage infrastructure ([#12](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/12)) ([f43768b](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/f43768b516b6bdf42fb5f02b385c831a90a93191))
+* add Docker Compose files for local development and testing ([#5](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/5)) ([c4da30c](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/c4da30c1baa2bb56881d9764b37b02d276ad9712))
+* add Dockerfile and entrypoint for containerized Hive ([#1](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/1)) ([334775f](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/334775fa305d538affec19c4c46de0c3fd48eb9b))
+* add Fargate Spot, rate limiting, run timeout, and EFS cleanup ([#27](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/27)) ([c8b12f7](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/c8b12f7603aaa62686ccfe6fb7b4078cc042663d))
+* add full local stack docker-compose with Hive + LocalStack ([#32](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/32)) ([826055f](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/826055f90db119e3e014045c6438c1ab08505d80))
+* add GitHub OAuth login for web dashboard ([#30](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/30)) ([3e43e90](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/3e43e9044ceb60b07ab846082408a8f652d357a6))
+* add LOCAL_MODE support for all AWS SDK clients ([#31](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/31)) ([71d76c6](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/71d76c6185b9a9318271bafc23b265b93eca23d9))
+* add LocalStack docker-compose for local AWS testing ([#28](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/28)) ([b0617b3](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/b0617b3ab12d3466032ef52f957075ad6d012e03))
+* add LocalStack docker-compose for local AWS testing ([#29](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/29)) ([70d7018](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/70d7018a19e62f982418e8a3b3fde4c7bf277f09))
+* add web dashboard scaffolding with React, Vite, and routing ([#2](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/2)) ([b3bb36e](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/b3bb36e8df10e887d1867753138cae52d3fbbb81))
+* dashboard run list with time/cost indicators and tests ([#4](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/4)) ([1691f79](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/1691f79562a4d994e7bad45a811a6dff276f8b85))
+* fix CDK region and enable local deploy with hive profile ([#34](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/34)) ([061d085](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/061d08596e97d0b4e468295d4e6e0fb065b91797))
+* implement API auth middleware and request validation ([#19](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/19)) ([a9cc257](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/a9cc257581ed92fa69c6a00281c4ca814f33927a))
+* implement IAM roles and security hardening ([#20](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/20)) ([0877794](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/0877794b8221ce8f63b3bbba1044a8ed313c2aa7))
+* implement inbound message relay - DynamoDB to SQLite ([#10](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/10)) ([fbaf973](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/fbaf973967092fc8045e1cc23576a359cfe315e1))
+* implement live run view with data fetching, WebSocket, and escalation replies ([#21](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/21)) ([a931472](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/a931472addca8e64643745bfd56e99116002ae95))
+* implement REST API Lambda handlers for all 11 endpoints ([#13](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/13)) ([aeefd2c](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/aeefd2c9ca8db97cd1f322c929642c3acee5f450))
+* implement state sync adapter - SQLite to DynamoDB bridge ([#7](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/7)) ([8108346](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/810834622b00bbdc5c4260c4feffd35ce18e35fc))
+* implement WebSocket handler and broadcaster Lambdas ([#11](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/11)) ([51a409a](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/51a409a89cd791baafa54d1222abbc2a701ca53a))
+* implement WebSocket hook and API client for dashboard ([#16](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/16)) ([41a11f0](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/41a11f0aec514a5b238251ab106c8d2a5e1c02c6))
+* initialize distributed hive from hungry-ghost-hive ([cd8ced7](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/cd8ced725ebe397c22504a325fd06ddf69f2929b))
+
+
+### Bug Fixes
+
+* exclude web tests from root vitest and add separate web CI step ([#14](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/issues/14)) ([d493fb5](https://github.com/GreenlightFreelance/hungry-ghost-distributed-hive/commit/d493fb52e8356a33f6f6a32512b102e2e1f9d3fd))
+
 ## [0.47.1](https://github.com/nikrich/hungry-ghost-hive/compare/hungry-ghost-hive-v0.47.0...hungry-ghost-hive-v0.47.1) (2026-03-10)
 
 
